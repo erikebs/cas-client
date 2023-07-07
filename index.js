@@ -106,48 +106,40 @@ module.exports = function httpCasClient(...options) {
 		/**
 		 * Try to resolve st mapped principal.
 		 */
-		const ticket = await getTicket();
+		const existingTicket = await getTicket();
+		debug('Checking ticket existency.');
 
-		if (ticket) {
-			debug(`A ticket has been found ST=${ticket}.`);
-			const serviceTicket = store.get(ticket);
-
-			if (serviceTicket && serviceTicket.valid) {
-				req.ticket = serviceTicket;
-				req.principal = serviceTicket.principal;
-				debug(`Principal has been injected to http.request by the ticket ST=${ticket}.`);
-
-				return true;
-			} else {
-				store.remove(ticket);
-				debug(`The ticket ST=${ticket} has been destroyed.`);
-
-				await ticketDestroyed(ticket);
-			}
+		if (existingTicket) {
+			debug(`A ticket has been found ST=${existingTicket}.`);
 		} else {
-			debug('No ticket found (changed).');
+			debug('No ticket found.');
 		}
 
 		/**
 		 * NO valid st in cookie, try to sso.
 		 */
 		const requestURL = new URL(req.url, agent.serviceUrl);
-		const newTicket = requestURL.searchParams.get('ticket');
+		const ticket = existingTicket ?? requestURL.searchParams.get('ticket');
 
-		if (newTicket) {
-			debug(`A new ticket recieved ST=${newTicket}`);
+		if (ticket) {
+			debug(`A new ticket recieved ST=${ticket}`);
 
 			requestURL.searchParams.delete('ticket');
-			const serviceTicketOptions = await agent.validateService(newTicket, requestURL);
+			const serviceTicketOptions = await agent.validateService(ticket, requestURL);
 
-			debug(`Ticket ST=${newTicket} has been validated successfully.`);
-			store.put(newTicket, serviceTicketOptions);
+			debug(`Ticket ST=${ticket} has been validated successfully.`);
 
-			await ticketCreated(newTicket);
+			if (!existingTicket) {
+				ticketCreated(ticket);
+			}
+
+			req.ticket = serviceTicketOptions;
+			req.principal = serviceTicketOptions.principal;
 
 			requestURL.searchParams.delete('_g');
 
 			sendRedirect(res, requestURL);
+			return true;
 		} else {
 			// Access is unauthenticated.
 			if (requestURL.searchParams.get('_g') === '1') {
