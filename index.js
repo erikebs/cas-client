@@ -136,9 +136,6 @@ module.exports = function httpCasClient(...options) {
 			req.ticket = serviceTicketOptions;
 			req.principal = serviceTicketOptions.principal;
 
-			requestURL.searchParams.delete('_g');
-
-			sendRedirect(res, requestURL);
 			return true;
 		} else {
 			// Access is unauthenticated.
